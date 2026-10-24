@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Assistant — STE Slicer</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231f6feb'/%3E%3Cpath d='M9 22l7-12 7 12z' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M9 22l7-12 7 12z"/></svg>
+      <div>
+        <div class="brand-title">AI Assistant</div>
+        <div class="brand-sub">STE Slicer</div>
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="top-actions">
+      <span class="conn" id="conn" title="Соединение со слайсером"><i></i><span>подключение…</span></span>
+      <button class="icon-btn" id="btnPanel" title="Панель состояния">▤</button>
+      <button class="icon-btn" id="btnExport" title="Экспорт диалога (Markdown)">⇩</button>
+      <button class="icon-btn" id="btnReset" title="Новый диалог">＋</button>
+      <button class="icon-btn" id="btnSettings" title="Настройки">⚙</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="chat" id="chat">
+      <div class="messages" id="messages">
+        <div class="welcome" id="welcome">
+          <h1>Опишите задачу печати</h1>
+          <p>Приложите модель (STL, OBJ, 3MF) и, при желании, фото или эскиз. Ассистент выберет режим 3D/5D, материал,
+            профиль и настройки, расположит модель, нарежет её и объяснит каждое решение.</p>
+          <div class="examples" id="examples">
+            <button>Кронштейн под нагрузку, PETG, без поддержек</button>
+            <button>Втулка из полиамида — подойдёт ли 5D-печать?</button>
+            <button>Сравни время печати при заполнении 20% и 40%</button>
+            <button>Покажи текущие настройки и объясни, что они значат</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer" id="composer">
+        <div class="drop-hint" id="dropHint">Отпустите файлы, чтобы прикрепить</div>
+        <div class="attachments" id="attachments"></div>
+        <div class="composer-row">
+          <button class="icon-btn attach" id="btnAttach" title="Прикрепить модель или изображение">📎</button>
+          <input type="file" id="fileInput" multiple accept=".stl,.obj,.3mf,.amf,.ply,.x3d,.png,.jpg,.jpeg,.webp" hidden>
+          <textarea id="input" rows="1" placeholder="Например: «Корпус датчика из ABS, нужна точность, поддержки допустимы»"></textarea>
+          <button class="send" id="btnSend" title="Отправить (Enter)">➤</button>
+          <button class="stop" id="btnStop" title="Остановить" hidden>■</button>
+        </div>
+        <div class="composer-foot"><span>Enter — отправить, Shift+Enter — новая строка</span><span id="usage"></span></div>
+      </div>
+    </section>
+
+    <aside class="panel" id="panel">
+      <div class="card">
+        <h3>Принтер</h3>
+        <div id="machineInfo" class="kv muted">—</div>
+      </div>
+      <div class="card">
+        <h3>Сцена</h3>
+        <div id="objects" class="muted">Моделей нет</div>
+      </div>
+      <div class="card" id="sliceCard">
+        <h3>Нарезка</h3>
+        <div class="slice-state" id="sliceState">Не выполнялась</div>
+        <div class="progress" id="sliceProgress" hidden><div></div></div>
+        <div class="slice-result" id="sliceResult"></div>
+        <div class="btn-row">
+          <button id="btnSlice">Нарезать</button>
+          <button id="btnGcode">G-code</button>
+          <button id="btnProject">Проект 3MF</button>
+        </div>
+      </div>
+      <div class="card small">
+        <h3>MCP-сервер</h3>
+        <div class="mcp-url"><code id="mcpUrl">—</code><button class="link" id="btnCopyMcp">копировать</button></div>
+        <div class="muted">Эти же инструменты доступны внешним MCP-клиентам.</div>
+      </div>
+    </aside>
+  </main>
+
+  <dialog id="settingsDialog">
+    <form method="dialog" id="settingsForm">
+      <h2>Настройки LLM</h2>
+      <label>Адрес API (OpenAI-совместимый)
+        <input name="api_base_url" placeholder="https://host/v1" autocomplete="off">
+      </label>
+      <label>Ключ доступа
+        <input name="api_key" type="password" placeholder="sk-…" autocomplete="off">
+      </label>
+      <label>Модель
+        <input name="model" list="modelList" placeholder="например, gpt-4o" autocomplete="off">
+        <datalist id="modelList"></datalist>
+      </label>
+      <div class="row">
+        <label>Температура <input name="temperature" type="number" min="0" max="2" step="0.1"></label>
+        <label>Макс. шагов <input name="max_steps" type="number" min="1" max="100"></label>
+        <label>Таймаут, с <input name="request_timeout" type="number" min="30" max="900"></label>
+      </div>
+      <label class="check"><input name="vision" type="checkbox"> Передавать изображения модели (vision)</label>
+      <label class="check"><input name="verify_ssl" type="checkbox"> Проверять сертификат TLS</label>
+      <label>Папка для G-code и 3MF
+        <input name="output_dir" autocomplete="off">
+      </label>
+      <label class="check"><input name="open_browser_on_start" type="checkbox"> Открывать чат при запуске слайсера</label>
+      <div class="test-result" id="testResult"></div>
+      <div class="dialog-actions">
+        <button type="button" id="btnTest">Проверить подключение</button>
+        <span class="spacer"></span>
+        <button type="button" id="btnCancelSettings">Отмена</button>
+        <button type="button" class="primary" id="btnSaveSettings">Сохранить</button>
+      </div>
+      <p class="muted small-note">Ключ хранится в настройках слайсера (steslicer.cfg) и не показывается в интерфейсе.</p>
+    </form>
+  </dialog>
+
+  <div class="toasts" id="toasts"></div>
+
+  <script src="transport.js"></script>
+  <script src="markdown.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
